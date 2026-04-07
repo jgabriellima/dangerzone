@@ -66,7 +66,7 @@ The script caches sudo credentials in `~/dangerzone/.sudo_pass` during deploymen
 |----------|-------|
 | `PORT` | 3000 |
 | `HOST` | 127.0.0.1 |
-| `CLAUDE_CODE_PATH` | `/home/administrator/.local/bin/claude` |
+| `CLAUDE_CODE_PATH` | OpenWork if `$NODE_DIR/openwork` exists (same CLI args as `claude`), else official `claude` binary — set by `deploy.sh` |
 | `CLAUDE_CONFIG_DIR` | `/home/administrator/.config/claude` |
 | `DANGERZONE_SESSIONS_DIR` | `/home/administrator/dangerzone/sessions` |
 | `NODE_ENV` | production |

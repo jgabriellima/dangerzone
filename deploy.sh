@@ -49,13 +49,21 @@ CLAUDE_UI_BIN=$(which claude-code-ui 2>/dev/null \
     || echo "")
 [[ -z "$CLAUDE_UI_BIN" ]] && fail "claude-code-ui não encontrado. Rode: npm install -g @siteboon/claude-code-ui"
 
-CLAUDE_BIN=$(which claude 2>/dev/null || echo "/home/administrator/.local/bin/claude")
-[[ ! -x "$CLAUDE_BIN" ]] && fail "claude binary não encontrado em $CLAUDE_BIN"
-
 NODE_DIR=$(dirname "$CLAUDE_UI_BIN")
+# Prefer OpenWork when present (same as ~/.bashrc: claude() { command openwork "$@"; }).
+# claude-code-ui spawns CLAUDE_CODE_PATH directly — no shell functions/aliases apply.
+if [[ -x "$NODE_DIR/openwork" ]]; then
+    CLAUDE_BIN="$NODE_DIR/openwork"
+elif command -v openwork >/dev/null 2>&1; then
+    CLAUDE_BIN=$(command -v openwork)
+else
+    CLAUDE_BIN=$(PATH="$NODE_DIR:/home/administrator/.local/bin:$PATH" which claude 2>/dev/null \
+        || echo "/home/administrator/.local/bin/claude")
+fi
+[[ ! -x "$CLAUDE_BIN" ]] && fail "claude/OpenWork binary não encontrado em $CLAUDE_BIN"
 
 ok "claude-code-ui : $CLAUDE_UI_BIN"
-ok "claude         : $CLAUDE_BIN"
+ok "claude (spawn)  : $CLAUDE_BIN"
 ok "node dir       : $NODE_DIR"
 ok "OS             : $(lsb_release -rs)"
 
@@ -115,6 +123,22 @@ UNIT
     NEED_CLOUDCLI_RESTART=true
 else
     skip "Unit file já existe"
+fi
+
+# Keep CLAUDE_CODE_PATH / CLAUDE_CLI_PATH in sync (e.g. after installing OpenWork)
+CLOUDCLI_UNIT=/etc/systemd/system/dangerzone-cloudcli.service
+if [[ -f "$CLOUDCLI_UNIT" ]]; then
+    OLD_CODE=$(grep -m1 '^Environment="CLAUDE_CODE_PATH=' "$CLOUDCLI_UNIT" 2>/dev/null | sed 's/^Environment="CLAUDE_CODE_PATH=//;s/"$//' || true)
+    OLD_CLI=$(grep -m1 '^Environment="CLAUDE_CLI_PATH=' "$CLOUDCLI_UNIT" 2>/dev/null | sed 's/^Environment="CLAUDE_CLI_PATH=//;s/"$//' || true)
+    if [[ "$OLD_CODE" != "$CLAUDE_BIN" ]] || [[ "$OLD_CLI" != "$CLAUDE_BIN" ]]; then
+        echo "  Atualizando CLAUDE_CODE_PATH no serviço: ${OLD_CODE:-?} → $CLAUDE_BIN"
+        sudo sed -i \
+            -e "s|^Environment=\"CLAUDE_CODE_PATH=.*|Environment=\"CLAUDE_CODE_PATH=${CLAUDE_BIN}\"|" \
+            -e "s|^Environment=\"CLAUDE_CLI_PATH=.*|Environment=\"CLAUDE_CLI_PATH=${CLAUDE_BIN}\"|" \
+            "$CLOUDCLI_UNIT"
+        NEED_CLOUDCLI_RESTART=true
+        sudo systemctl daemon-reload
+    fi
 fi
 
 # Garantir que todos os dirs do ReadWritePaths existam antes de iniciar
